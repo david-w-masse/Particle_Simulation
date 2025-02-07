@@ -80,7 +80,7 @@ void Assign_Particle_Data()
 		Particles[i].Size = Colloid_Diameter/2.0;
 		Particles[i].Type = 2;
 
-		Particles[i].Effective_Range = Reaction_Radius;
+		Particles[i].Effective_Range = 5;
 		Particles[i].Diffusion = 0.2;
 
 		Particles[i].Inside_Reaction = false;
@@ -155,11 +155,6 @@ void Initialize_Positions()
 						throw std::invalid_argument("Error: Cannot place particle.");
 					}
 				}
-
-				else
-				{
-					cout << "particle_placed " << i << endl;
-				}
 			}
 
 			Particles[i].Position_X = Temp_X;
@@ -216,11 +211,9 @@ void Initialize_Positions()
 						throw std::invalid_argument("Error: Cannot place particle.");
 					}
 				}
-				else
-				{
-					cout << "particle_placed " << i << endl;
-				}
 			}
+
+			cout << "particle placed " << i << endl; 
 
 			Particles[i].Position_X = Temp_X;
 			Particles[i].Position_Y = Temp_Y;
