@@ -17,7 +17,8 @@
 #include <fstream>
 #include <stdexcept>
 
-#include <emmintrin.h>
+//#include <emmintrin.h>
+#include <immintrin.h>
 
 #include "Particle_Simulation.h"
 
@@ -29,9 +30,9 @@ Particle_Structure* Particles;
 
 // simulation variables
 double Particle_Diameter = 1;
-double Colloid_Diameter = 2;
+double Colloid_Diameter = 5; // nominal 5
 
-double Reaction_Radius = 5.0;
+double Reaction_Radius = 7.5; // nominal 7
 double Change_Rate = 0.0003;
 
 double End_Time = 1500.0;
@@ -41,12 +42,14 @@ double Epsilon_WCA = 10;
 double Epsilon_LJ = 3;
 
 int Dimension = 2;
-int Number_Particles = 1050;
-int Number_Colloids = 300;
+int Number_Particles = 750;
+int Number_Colloids = 128;
 
 double Region_Size[3];
 
 double Sigma_Square;
+double Sigma_Square_Colloid_Colloid;
+double Sigma_Square_Colloid_Particle;
 double Sigma_Test_WCA;
 double Sigma_Test_WCA_Colloid_Particle;
 double Sigma_Test_WCA_Colloid_Colloid;
@@ -60,6 +63,9 @@ int Neighbor_Count;
 int main(int argc, char* argv[])
 {
 	Sigma_Square = pow(Particle_Diameter, 2);
+	Sigma_Square_Colloid_Colloid = pow(Colloid_Diameter, 2);
+	Sigma_Square_Colloid_Particle = pow((Colloid_Diameter + Particle_Diameter) / 2, 2);
+	
 	Sigma_Test_WCA = pow(2.0, (2 / 6.0)) * Sigma_Square;
 	Sigma_Test_LJ = pow(2.5, 2) * Sigma_Square;
 
@@ -71,14 +77,14 @@ int main(int argc, char* argv[])
 
 	Reaction_Radius_Squared = Reaction_Radius * Reaction_Radius;
 	
-	Region_Size[0] = 70;
-	Region_Size[1] = 70;
+	Region_Size[0] = 100;
+	Region_Size[1] = 100;
 
 	Cell_Grid[0].Divisions[0] = 20;
 	Cell_Grid[0].Divisions[1] = 20;
 
-	Cell_Grid[1].Divisions[0] = 9;
-	Cell_Grid[1].Divisions[1] = 9;
+	Cell_Grid[1].Divisions[0] = 10;
+	Cell_Grid[1].Divisions[1] = 10;
 
 	if (Dimension == 2)
 	{
@@ -94,12 +100,12 @@ int main(int argc, char* argv[])
 	}
 	else
 	{
-		Region_Size[2] = 70;
+		Region_Size[2] = 100;
 
 		Cell_Grid[0].Divisions[2] = 20;
 		Cell_Grid[0].Total_Divisions = Cell_Grid[0].Divisions[0] * Cell_Grid[0].Divisions[1] * Cell_Grid[0].Divisions[2];
 
-		Cell_Grid[1].Divisions[2] = 9;
+		Cell_Grid[1].Divisions[2] = 10;
 		Cell_Grid[1].Total_Divisions = Cell_Grid[1].Divisions[0] * Cell_Grid[1].Divisions[1] * Cell_Grid[1].Divisions[2];
 
 		Neighbor_Count = 13;
@@ -107,9 +113,13 @@ int main(int argc, char* argv[])
 
 	Build_Memory();
 
+	cout << "memory allocated" << endl;
+
 	Assign_Particle_Data();
 
 	Initialize_Positions();
+
+	cout << "positions assigned" << endl;
 
 	Build_Neighbor_List(0);
 	Build_Neighbor_List(1);
@@ -187,8 +197,8 @@ int main(int argc, char* argv[])
 						}
 					}
 				}
-				
-				//Particles[i].Type = 1;
+
+				//Particles[i].Type = 0;
 
 				Particles[i].Inside_Reaction = false;
 			}
@@ -204,43 +214,16 @@ int main(int argc, char* argv[])
 			for (int i = 0; i < Number_Particles + Number_Colloids; i++)
 			{				
 				double diff_delta_t = Particles[i].Diffusion * Delta_t;
-				double srqt_diff_delta_t = sqrt(2 * diff_delta_t);
 
-				// normal
 				double rand_num_1 = Random_Force(Random_Normal);
 				double rand_num_2 = Random_Force(Random_Normal);
+
+				// normal
+				
+				double srqt_diff_delta_t = sqrt(2 * diff_delta_t);
 				
 				delta_x = (Particles[i].Force_X * diff_delta_t + srqt_diff_delta_t * rand_num_1);
 				delta_y = (Particles[i].Force_Y * diff_delta_t + srqt_diff_delta_t * rand_num_2);
-				
-				// AVX
-				/*
-				__m256d vec_mul_forces = _mm256_set_pd(Particles[i].Force_X, Particles[i].Force_Y, 2.0, 2.0);
-
-				__m256d vec_diff_delta = _mm256_set_pd(diff_delta_t, diff_delta_t, diff_delta_t, diff_delta_t);
-
-				__m256d vec_mul_step_1 = _mm256_mul_pd(vec_mul_forces, vec_mul_forces);
-
-				__m256d vec_mul_step_2 = _mm256_sqrt_pd(vec_mul_step_1);
-
-				double* vec_s_1 = (double*)&vec_s_1;
-
-				double* vec_s_2 = (double*)&vec_s_2;
-
-				__m256d vec_fma_add = _mm256_set_pd(vec_s_1[3], vec_s_1[2], 0.0, 0.0);
-
-				__m256d vec_fma_mul_1 = _mm256_set_pd(vec_s_2[1], vec_s_2[0], 0.0, 0.0);
-
-				__m256d vec_fma_mul_2 = _mm256_set_pd(rand_num_1, rand_num_2, 0.0, 0.0);
-
-				__m256d vec_mul_step_3 = _mm256_fmadd_pd(vec_fma_mul_1, vec_fma_mul_2, vec_fma_add);
-
-				double* vec_s_3 = (double*)&vec_s_3;
-
-				delta_x = vec_s_3[3];
-				delta_y = vec_s_3[2];
-				*/
-
 
 				Particles[i].Delta_X += delta_x;
 				Particles[i].Delta_Y += delta_y;
@@ -437,7 +420,7 @@ int main(int argc, char* argv[])
 
 			steps += 1;
 
-			if ((steps % 1000) == 0)
+			if ((steps % 333333) == 0)
 			{
 				for (int i = 0; i < Number_Particles + Number_Colloids; i++)
 				{
@@ -447,7 +430,7 @@ int main(int argc, char* argv[])
 				for (int i = Number_Particles; i < Number_Particles + Number_Colloids; i++)
 				{
 					MSD_File << Particles[i].Delta_X << "\t" << Particles[i].Delta_Y << "\t" << Particles[i].Delta_Z << "\n";
-				}
+				}				
 			}
 		}
 	}
@@ -461,7 +444,7 @@ int main(int argc, char* argv[])
 
 	Clear_Memory();
 
-	//int a;
+	int a;
 
 	//cin >> a;
 
@@ -851,31 +834,13 @@ void Calculate_Particle_Forces_2D(int Index_1, int Index_2, double Offset_X, dou
 	double Vector_Y = Particles[Index_2].Position_Y - (Particles[Index_1].Position_Y + Offset_Y);
 	
 	// normal
-	//double r_square = pow((Vector_X), 2) + pow((Vector_Y), 2);
-	//double Temp_Force_X;
-	//double Temp_Force_Y;
+	double r_square = Vector_X * Vector_X + Vector_Y * Vector_Y;
+	double Temp_Force_X;
+	double Temp_Force_Y;
 
-	// AVX
-	/*
-	__m256d vec_mul = _mm256_set_pd(Vector_X, Vector_Y, 0.0, 0.0);
-
-	__m256d r_vect = _mm256_mul_pd(vec_mul, vec_mul);
-
-	double* r_s = (double*)&r_vect;
-
-	double r_square = r_s[2] + r_s[3];
-	*/
-
-	// SSE2
-	__m128d vec_mul = _mm_set_pd(Vector_X, Vector_Y);
-
-	__m128d r_vect = _mm_mul_pd(vec_mul, vec_mul);
-
-	double* r_s = (double*)&r_vect;
-
-	double r_square = r_s[0] + r_s[1];
 
 	double base_calc;
+	double temp_s;
 
 	if ((Particles[Index_1].Type == 1) && (Particles[Index_2].Type == 1))
 	{
@@ -884,12 +849,13 @@ void Calculate_Particle_Forces_2D(int Index_1, int Index_2, double Offset_X, dou
 
 		if (r_square < Sigma_Test_LJ)
 		{
-			base_calc = pow(Sigma_Square / r_square, 3);
+			temp_s = Sigma_Square / r_square;
 			
-			f_lj = Epsilon_LJ_x_24 / r_square * (-2.0 * pow(base_calc, 2) + base_calc);
+			base_calc = temp_s * temp_s * temp_s;
+			
+			f_lj = Epsilon_LJ_x_24 / r_square * (-2.0 * base_calc * base_calc + base_calc);
 
 			// normal
-			/*
 			Temp_Force_X = Vector_X * f_lj;
 			Temp_Force_Y = Vector_Y * f_lj;
 
@@ -898,35 +864,6 @@ void Calculate_Particle_Forces_2D(int Index_1, int Index_2, double Offset_X, dou
 
 			Particles[Index_1].Force_Y += Temp_Force_Y;
 			Particles[Index_2].Force_Y -= Temp_Force_Y;
-			*/
-
-			// AVX
-			/*
-			__m256d f_mul_l = _mm256_set_pd(f_lj, f_lj, 0.0, 0.0);
-
-			__m256d f_vect_l = _mm256_mul_pd(vec_mul, f_mul_l);
-
-			double* f_v_l = (double*)&f_vect_l;
-
-			Particles[Index_1].Force_X += f_v_l[3];
-			Particles[Index_2].Force_X -= f_v_l[3];
-
-			Particles[Index_1].Force_Y += f_v_l[2];
-			Particles[Index_2].Force_Y -= f_v_l[2];
-			*/
-			
-			// SSE2
-			__m128d f_mul_l = _mm_set_pd(f_lj, f_lj);
-
-			__m128d f_vect_l = _mm_mul_pd(vec_mul, f_mul_l);
-
-			double* f_v_l = (double*)&f_vect_l;
-
-			Particles[Index_1].Force_X += f_v_l[1];
-			Particles[Index_2].Force_X -= f_v_l[1];
-
-			Particles[Index_1].Force_Y += f_v_l[0];
-			Particles[Index_2].Force_Y -= f_v_l[0];
 		}
 	}
 	else
@@ -936,12 +873,13 @@ void Calculate_Particle_Forces_2D(int Index_1, int Index_2, double Offset_X, dou
 
 		if (r_square < Sigma_Test_WCA)
 		{
-			base_calc = pow(Sigma_Square / r_square, 3);
+			temp_s = Sigma_Square / r_square;
 			
-			f_wca = Epsilon_WCA_x_24 / r_square * (-2.0 * pow(base_calc, 2) + base_calc);
+			base_calc = temp_s * temp_s * temp_s;
+			
+			f_wca = Epsilon_WCA_x_24 / r_square * (-2.0 * base_calc * base_calc + base_calc);
 
 			// normal
-			/*
 			Temp_Force_X = Vector_X * f_wca;
 			Temp_Force_Y = Vector_Y * f_wca;
 
@@ -950,35 +888,6 @@ void Calculate_Particle_Forces_2D(int Index_1, int Index_2, double Offset_X, dou
 
 			Particles[Index_1].Force_Y += Temp_Force_Y;
 			Particles[Index_2].Force_Y -= Temp_Force_Y;
-			*/
-
-			// AVX
-			/*
-			__m256d f_mul_w = _mm256_set_pd(f_wca, f_wca, 0.0, 0.0);
-
-			__m256d f_vect_w = _mm256_mul_pd(vec_mul, f_mul_w);
-
-			double* f_v_w = (double*)&f_vect_w;
-
-			Particles[Index_1].Force_X += f_v_w[3];
-			Particles[Index_2].Force_X -= f_v_w[3];
-
-			Particles[Index_1].Force_Y += f_v_w[2];
-			Particles[Index_2].Force_Y -= f_v_w[2];
-			*/
-
-			// SSE 2
-			__m128d f_mul_w = _mm_set_pd(f_wca, f_wca);
-
-			__m128d f_vect_w = _mm_mul_pd(vec_mul, f_mul_w);
-
-			double* f_v_w = (double*)&f_vect_w;
-
-			Particles[Index_1].Force_X += f_v_w[1];
-			Particles[Index_2].Force_X -= f_v_w[1];
-
-			Particles[Index_1].Force_Y += f_v_w[0];
-			Particles[Index_2].Force_Y -= f_v_w[0];
 		}
 	}
 }
@@ -989,35 +898,18 @@ void Calculate_Colloid_Forces_2D(int Index_1, int Index_2, double Offset_X, doub
 	double Vector_Y = Particles[Index_2].Position_Y - (Particles[Index_1].Position_Y + Offset_Y);
 
 	// normal
-	//double r_square = pow((Vector_X), 2) + pow((Vector_Y), 2);
-
-	// AVX
-	/*
-	__m256d vec_mul = _mm256_set_pd(Vector_X, Vector_Y, 0.0, 0.0);
-
-	__m256d r_vect = _mm256_mul_pd(vec_mul, vec_mul);
-
-	double* r_s = (double*)&r_vect;
-
-	double r_square = r_s[2] + r_s[3];
-	*/
-
-	// SSE2
-	__m128d vec_mul = _mm_set_pd(Vector_X, Vector_Y);
-
-	__m128d r_vect = _mm_mul_pd(vec_mul, vec_mul);
-
-	double* r_s = (double*)&r_vect;
-
-	double r_square = r_s[1] + r_s[0];
+	double r_square = Vector_X * Vector_X + Vector_Y * Vector_Y;
 
 	// WCA potential
 
 	double f_wca = 0;
 
+	double temp_s;
+
 	bool Particle_Present = false;
 
 	double Test_Sigma = Sigma_Test_WCA_Colloid_Particle;
+	double Sigma_Square_Use = Sigma_Square_Colloid_Particle;
 
 	if (Index_1 < Number_Particles)
 	{
@@ -1042,16 +934,18 @@ void Calculate_Colloid_Forces_2D(int Index_1, int Index_2, double Offset_X, doub
 	if (!Particle_Present)
 	{
 		Test_Sigma = Sigma_Test_WCA_Colloid_Colloid;
+		Sigma_Square_Use = Sigma_Square_Colloid_Colloid;
 	}
 
 	if (r_square < Test_Sigma)
 	{
-		double base_calc = pow(Test_Sigma / r_square, 3);
+		temp_s = Sigma_Square_Use / r_square;
 		
-		f_wca = Epsilon_WCA_x_24 / r_square * (-2.0 * pow(base_calc, 2) + base_calc);
+		double base_calc = temp_s * temp_s * temp_s;
+		
+		f_wca = Epsilon_WCA_x_24 / r_square * (-2.0 * base_calc * base_calc + base_calc);
 
 		// normal
-		/*
 		double Temp_Force_X = Vector_X * f_wca;
 		double Temp_Force_Y = Vector_Y * f_wca;
 
@@ -1060,35 +954,6 @@ void Calculate_Colloid_Forces_2D(int Index_1, int Index_2, double Offset_X, doub
 
 		Particles[Index_1].Force_Y += Temp_Force_Y;
 		Particles[Index_2].Force_Y -= Temp_Force_Y;
-		*/
-
-		// AVX
-		/*
-		__m256d f_mul = _mm256_set_pd(f_wca, f_wca, 0.0, 0.0);
-
-		__m256d f_vect = _mm256_mul_pd(vec_mul, f_mul);
-
-		double* f_v = (double*)&f_vect;
-
-		Particles[Index_1].Force_X += f_v[3];
-		Particles[Index_2].Force_X -= f_v[3];
-
-		Particles[Index_1].Force_Y += f_v[2];
-		Particles[Index_2].Force_Y -= f_v[2];
-		*/
-
-		// SSE2
-		__m128d f_mul = _mm_set_pd(f_wca, f_wca);
-
-		__m128d f_vect = _mm_mul_pd(vec_mul, f_mul);
-
-		double* f_v = (double*)&f_vect;
-
-		Particles[Index_1].Force_X += f_v[1];
-		Particles[Index_2].Force_X -= f_v[1];
-
-		Particles[Index_1].Force_Y += f_v[0];
-		Particles[Index_2].Force_Y -= f_v[0];
 	}
 }
 
